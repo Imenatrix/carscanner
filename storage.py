@@ -22,7 +22,7 @@ def aws_dynamo(gb):
     price_cum = np.cumsum(price)
     return {
         'dynamodb' : price,
-        'dynamodb' : price_cum
+        'dynamodb - cumulative' : price_cum
     }
 
 def cloud_storage(gib):
