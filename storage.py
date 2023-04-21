@@ -17,7 +17,9 @@ gb_array = bytes_array / (10 ** 9)
 gib_array = bytes_array / (1<<30)
 
 price_per_gb_aws_dynamo = 0.25
+price_per_gib_cloud_storage = 0.02
 aws_dynamo_price_array = price_per_gb_aws_dynamo * gb_array
+cloud_storage_price_array = price_per_gib_cloud_storage * gib_array
 
 df = pd.DataFrame({
     'month' : time_array,
@@ -25,6 +27,8 @@ df = pd.DataFrame({
     'gigabytes' : gib_array,
     'dynamodb' : aws_dynamo_price_array,
     'dynamodb - cumulative' : np.cumsum(aws_dynamo_price_array),
+    'cloud storage' : cloud_storage_price_array,
+    'cloud storage - cumulative' : np.cumsum(cloud_storage_price_array),
 })
 df = df.round(2)
 
