@@ -5,64 +5,72 @@ bytes_per_row = 2303
 rows_per_minute = 30
 
 rows_per_month = rows_per_minute * 60 * 24 * 30
-
 bytes_per_month = rows_per_month * bytes_per_row
 
 years = 10
 months = years * 12 + 1
+time = np.arange(months + 1)
 
-time_array = np.arange(months + 1)
-bytes_array = time_array * bytes_per_month
+bytes_array = time * bytes_per_month
 gb_array = bytes_array / (10 ** 9)
 gib_array = bytes_array / (1<<30)
 
-def aws_dynamo(gb):
-    price_per_gb = 0.25
-    price = gb * price_per_gb
-    price_cum = np.cumsum(price)
-    return {
-        'dynamodb' : price,
-        'dynamodb - cumulative' : price_cum
-    }
+def gb(t):
+    return gb_array
 
-def cloud_storage(gib):
-    price_per_gib = 0.03
-    price = gib * price_per_gib
-    price_cum = np.cumsum(price)
-    return {
-        'cloud storage' : price,
-        'cloud storage - cumulative' : price_cum
-    }
+def gib(t):
+    return gib_array
 
-def cloud_sql(gib):
-    price_per_gib = 0.17
-    instance_cost = 49.31
-    price = gib * price_per_gib + instance_cost
-    price_cum = np.cumsum(price)
-    return {
-        'cloud sql' : price,
-        'cloud sql - cumulative' : price_cum
+services = {
+    'dynamodb' : {
+        'cost' : 0.25,
+        'storage' : gb,
+    },
+    'rds' : {
+        'cost' : 0.115,
+        'storage' : gb,
+        'additional_costs' : {
+            'server' : 32.12,
+            'proxy' : 21.90
+        }
+    },
+    'cloud_storage' : {
+        'cost' : 0.03,
+        'storage' : gib,
+    },
+    'cloud sql' : {
+        'cost' : 0.17,
+        'storage' : gib,
+        'additional_costs' : {
+            'server' : 49.31
+        }
     }
+}
 
-def aws_rds(gb):
-    price_per_gb = 0.115
-    instance_cost = 32.12
-    proxy_cost = 21.90
-    price = gb * price_per_gb + instance_cost + proxy_cost
-    price_cum = np.cumsum(price)
-    return {
-        'rds' : price,
-        'rds - cumulative' : price_cum
-    }
+def estimate(services, cum):
+    out = {}
+    for title, service in services.items():
+        out_service = estimate_service(title, service, cum)
+        out = {**out, **out_service}
+    return out
+
+def estimate_service(title, service, cum):
+    price = service['cost'] * service['storage'](time)
+    if 'additional_costs' in service:
+        for cost in service['additional_costs'].values():
+            price += cost
+    
+    out = {}
+    out[title] = price
+    if cum:
+        out[f'{title} - cumulative'] = np.cumsum(price)
+    return out
 
 df = pd.DataFrame({
-    'month' : time_array,
+    'month' : time,
     'bytes' : bytes_array,
     'gigabytes' : gib_array,
-    **aws_dynamo(gb_array),
-    **aws_rds(gb_array),
-    **cloud_storage(gib_array),
-    **cloud_sql(gib_array),
+    **estimate(services, True)
 })
 df = df.round(2)
 
