@@ -44,6 +44,10 @@ services = {
         'additional_costs' : {
             'server' : 49.31
         }
+    },
+    'firestore' : {
+        'cost' : '0.18',
+        'storage' : gb,
     }
 }
 
