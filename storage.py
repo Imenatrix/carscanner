@@ -46,7 +46,7 @@ services = {
         }
     },
     'firestore' : {
-        'cost' : '0.18',
+        'cost' : 0.18,
         'storage' : gb,
     }
 }
