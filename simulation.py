@@ -18,7 +18,7 @@ def generate_row():
         'cambio' : fake.random_element(elements=('Automático', 'Manual')),
         'url' : mimesis.Internet().uri(query_params_count=5),
         'data_publicacao' : fake.date_time(),
-        'data_pesqusia' : fake.date_time()
+        'data_pesquisa' : fake.date_time()
     }
 
 data = [generate_row() for x in range(43200)]
