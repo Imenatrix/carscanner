@@ -68,7 +68,7 @@ services = {
     },
     'cloud sql' : {
         'cost' : 0.17,
-        'storage' : sql_gb,
+        'storage' : sql_gib,
         'additional_costs' : {
             'server' : 49.31
         }
