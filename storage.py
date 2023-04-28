@@ -9,127 +9,138 @@ years = 10
 months = years * 12 + 1
 time = np.arange(months + 1)
 
-def std(value):
-    def calc_aditional_costs(service):
+class Service:
+    cost = 0
+    title = ''
+    unit = 'GB'
+    bytes_per_entry = 0
+    additional_costs = {}
+
+    def storage_in_bytes(self, time):
+        bytes_over_time = rows_per_month * self.bytes_per_entry
+        return bytes_over_time * time
+    
+    def storage_in_unit(self, time):
+        storage = self.storage_in_bytes(time)
+        if self.unit == 'GB':
+            return storage / (10 ** 9)
+        elif self.unit == 'GiB':
+            return storage / (1<<30)
+        
+    def total_storage(self, time):
+        return self.storage_in_unit(time)
+
+    def calc_aditional_costs(self):
         price = 0
-        if 'additional_costs' in service:
-            for cost in service['additional_costs'].values():
-                price += cost
+        for cost in self.additional_costs.values():
+            price += cost
         return price
     
-    def calc_cost(service):
-        storage = service['storage'](time)
-        price = value * storage
-        return price + calc_aditional_costs(service)
+    def calc_cost(self):
+        storage = self.storage_in_unit(time)
+        price = self.cost * storage
+        return price + self.calc_aditional_costs()
     
-    return calc_cost
+    def estimate(self, cum):
+        storage = self.total_storage(time)
+        price = self.calc_cost()
+        
+        out = {}
+        out[f'{self.title} - storage'] = storage
+        out[f'{self.title} - price'] = price
+        if cum:
+            out[f'{self.title} - cumulative'] = np.cumsum(price)
+        return out
 
-def big_query_cost(active_price, inactive_price):
-    def calc_aditional_costs(service):
-        price = 0
-        if 'additional_costs' in service:
-            for cost in service['additional_costs'].values():
-                price += cost
-        return price
     
-    def calc_cost(service):
-        storage = service['storage'](time)
-        price = active_price * storage['active'] + inactive_price * storage['inactive']
-        return price + calc_aditional_costs(service)
+class DynamoDB(Service):
+    cost = 0.25
+    title = 'dynamodb'
+    bytes_per_entry = 450
 
-    return calc_cost
-    
-
-def sql(time):
-    bytes_per_row = 330
-    bytes_over_time = rows_per_month * bytes_per_row
-    return bytes_over_time * time
-
-def firebase(time):
-    bytes_per_row = 450
-    bytes_over_time = rows_per_month * bytes_per_row
-    return bytes_over_time * time
-
-def tfrecord(time):
-    bytes_per_row = 570
-    bytes_over_time = rows_per_month * bytes_per_row
-    return bytes_over_time * time
-
-def big_query(time):
-    coiso = lambda x: x if x < 3 else 3
-    coiso = np.vectorize(coiso)
-    time_active = coiso(time)
-    time_inactive = time - time_active
-    bytes_per_row = 330
-    bytes_over_time = rows_per_month * bytes_per_row
-    return {
-        'active' : bytes_over_time * time_active / (1<<30),
-        'inactive' : bytes_over_time * time_inactive / (1<<30)
+class RDS(Service):
+    cost = 0.115
+    title = 'rds'
+    bytes_per_entry = 330
+    additional_costs = {
+        'server' : 32.12,
+        'proxy' : 21.90
     }
 
+class CloudStorage(Service):
+    cost = 0.03
+    title = 'cloud storage'
+    bytes_per_entry = 570
+    unit = 'GiB'
 
-def gb(bytes_array):
-    return bytes_array / (10 ** 9)
-
-def gib(bytes_array):
-    return bytes_array / (1<<30)
-
-def sql_gb(time):
-    return gb(sql(time))
-
-def sql_gib(time):
-    return gib(sql(time))
-
-services = {
-    'dynamodb' : {
-        'cost' : std(0.25),
-        'storage' : lambda time: gb(firebase(time)),
-    },
-    'rds' : {
-        'cost' : std(0.115),
-        'storage' : sql_gb,
-        'additional_costs' : {
-            'server' : 32.12,
-            'proxy' : 21.90
-        }
-    },
-    'cloud_storage' : {
-        'cost' : std(0.03),
-        'storage' : lambda time: gib(tfrecord(time)),
-    },
-    'cloud sql' : {
-        'cost' : std(0.17),
-        'storage' : sql_gib,
-        'additional_costs' : {
-            'server' : 49.31
-        }
-    },
-    'firestore' : {
-        'cost' : std(0.18),
-        'storage' : lambda time: gib(firebase(time)),
-    },
-    'big query' : {
-        'cost' : big_query_cost(active_price=0.023, inactive_price=0.016),
-        'storage' : big_query
+class CloudSQL(Service):
+    cost = 0.17
+    unit = 'GiB'
+    title = 'cloud sql'
+    bytes_per_entry = 330
+    additional_costs = {
+        'server' : 49.31
     }
-}
+
+class Firestore(Service):
+    cost = 0.18
+    unit = 'GiB'
+    title = 'firestore'
+    bytes_per_entry = 450
+
+class BigQuery(Service):
+    cost_active = 0.023
+    cost_inactive = 0.016
+    bytes_per_entry = 330
+    title = 'big query'
+    unit = 'GiB'
+
+    def storage_in_bytes(self, time):
+        coiso = lambda x: x if x < 3 else 3
+        coiso = np.vectorize(coiso)
+        time_active = coiso(time)
+        time_inactive = time - time_active
+        bytes_over_time = rows_per_month * self.bytes_per_entry
+        return {
+            'active' : bytes_over_time * time_active,
+            'inactive' : bytes_over_time * time_inactive
+        }
+    
+    def storage_in_unit(self, time):
+        storage = self.storage_in_bytes(time)
+        if self.unit == 'GB':
+            return {
+                'active' : storage['active'] / (10 ** 9),
+                'inactive' : storage['inactive'] / (10 ** 9)
+            }
+        elif self.unit == 'GiB':
+            return {
+                'active' : storage['active'] / (1<<30),
+                'inactive' : storage['inactive'] / (1<<30)
+            }
+
+    def total_storage(self, time):
+        storage = self.storage_in_unit(time)
+        return storage['active'] + storage['inactive']
+    
+    def calc_cost(self):
+        storage = self.storage_in_unit(time)
+        price = self.cost_active * storage['active'] + self.cost_inactive * storage['inactive']
+        return price + self.calc_aditional_costs()
+
+services = [
+    DynamoDB(),
+    RDS(),
+    CloudStorage(),
+    CloudSQL(),
+    Firestore(),
+    BigQuery(),
+]
 
 def estimate(services, cum):
     out = {}
-    for title, service in services.items():
-        out_service = estimate_service(title, service, cum)
-        out = {**out, **out_service}
-    return out
-
-def estimate_service(title, service, cum):
-    #storage = service['storage'](time)
-    price = service['cost'](service)
-    
-    out = {}
-    #out[f'{title} - storage'] = storage
-    out[f'{title} - price'] = price
-    if cum:
-        out[f'{title} - cumulative'] = np.cumsum(price)
+    for service in services:
+        out = {**out, **service.estimate(cum)}
     return out
 
 df = pd.DataFrame({
