@@ -19,6 +19,11 @@ def firebase(time):
     bytes_over_time = rows_per_month * bytes_per_row
     return bytes_over_time * time
 
+def tfrecord(time):
+    bytes_per_row = 570
+    bytes_over_time = rows_per_month * bytes_per_row
+    return bytes_over_time * time
+
 def gb(bytes_array):
     return bytes_array / (10 ** 9)
 
@@ -46,7 +51,7 @@ services = {
     },
     'cloud_storage' : {
         'cost' : 0.03,
-        'storage' : sql_gb,
+        'storage' : lambda time: gib(tfrecord(time)),
     },
     'cloud sql' : {
         'cost' : 0.17,
