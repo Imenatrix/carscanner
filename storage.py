@@ -9,6 +9,37 @@ years = 10
 months = years * 12 + 1
 time = np.arange(months + 1)
 
+def std(value):
+    def calc_aditional_costs(service):
+        price = 0
+        if 'additional_costs' in service:
+            for cost in service['additional_costs'].values():
+                price += cost
+        return price
+    
+    def calc_cost(service):
+        storage = service['storage'](time)
+        price = value * storage
+        return price + calc_aditional_costs(service)
+    
+    return calc_cost
+
+def big_query_cost(active_price, inactive_price):
+    def calc_aditional_costs(service):
+        price = 0
+        if 'additional_costs' in service:
+            for cost in service['additional_costs'].values():
+                price += cost
+        return price
+    
+    def calc_cost(service):
+        storage = service['storage'](time)
+        price = active_price * storage['active'] + inactive_price * storage['inactive']
+        return price + calc_aditional_costs(service)
+
+    return calc_cost
+    
+
 def sql(time):
     bytes_per_row = 330
     bytes_over_time = rows_per_month * bytes_per_row
@@ -51,11 +82,11 @@ def sql_gib(time):
 
 services = {
     'dynamodb' : {
-        'cost' : 0.25,
+        'cost' : std(0.25),
         'storage' : lambda time: gb(firebase(time)),
     },
     'rds' : {
-        'cost' : 0.115,
+        'cost' : std(0.115),
         'storage' : sql_gb,
         'additional_costs' : {
             'server' : 32.12,
@@ -63,26 +94,24 @@ services = {
         }
     },
     'cloud_storage' : {
-        'cost' : 0.03,
+        'cost' : std(0.03),
         'storage' : lambda time: gib(tfrecord(time)),
     },
     'cloud sql' : {
-        'cost' : 0.17,
+        'cost' : std(0.17),
         'storage' : sql_gib,
         'additional_costs' : {
             'server' : 49.31
         }
     },
     'firestore' : {
-        'cost' : 0.18,
+        'cost' : std(0.18),
         'storage' : lambda time: gib(firebase(time)),
+    },
+    'big query' : {
+        'cost' : big_query_cost(active_price=0.023, inactive_price=0.016),
+        'storage' : big_query
     }
-}
-
-big_query_service = {
-    'cost_active' : 0.023,
-    'cost_inactive' : 0.016,
-    'storage' : big_query
 }
 
 def estimate(services, cum):
@@ -93,28 +122,11 @@ def estimate(services, cum):
     return out
 
 def estimate_service(title, service, cum):
-    storage = service['storage'](time)
-    price = service['cost'] * storage
-    if 'additional_costs' in service:
-        for cost in service['additional_costs'].values():
-            price += cost
+    #storage = service['storage'](time)
+    price = service['cost'](service)
     
     out = {}
-    out[f'{title} - storage'] = storage
-    out[f'{title} - price'] = price
-    if cum:
-        out[f'{title} - cumulative'] = np.cumsum(price)
-    return out
-
-def estimate_big_query(title, service, cum):
-    storage = service['storage'](time)
-    price = service['cost_active'] * storage['active'] + service['cost_inactive'] * storage['inactive']
-    if 'additional_costs' in service:
-        for cost in service['additional_costs'].values():
-            price += cost
-    
-    out = {}
-    out[f'{title} - storage'] = storage['active'] + storage['inactive']
+    #out[f'{title} - storage'] = storage
     out[f'{title} - price'] = price
     if cum:
         out[f'{title} - cumulative'] = np.cumsum(price)
@@ -122,8 +134,7 @@ def estimate_big_query(title, service, cum):
 
 df = pd.DataFrame({
     'month' : time,
-    **estimate(services, True),
-    **estimate_big_query('big query', big_query_service, True)
+    **estimate(services, True)
 })
 df = df.round(2)
 
