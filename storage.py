@@ -69,21 +69,21 @@ def estimate(services, cum):
     return out
 
 def estimate_service(title, service, cum):
-    price = service['cost'] * service['storage'](time)
+    storage = service['storage'](time)
+    price = service['cost'] * storage
     if 'additional_costs' in service:
         for cost in service['additional_costs'].values():
             price += cost
     
     out = {}
-    out[title] = price
+    out[f'{title} - storage'] = storage
+    out[f'{title} - price'] = price
     if cum:
         out[f'{title} - cumulative'] = np.cumsum(price)
     return out
 
 df = pd.DataFrame({
     'month' : time,
-    'bytes' : bytes_array,
-    'gigabytes' : gib_array,
     **estimate(services, True)
 })
 df = df.round(2)
