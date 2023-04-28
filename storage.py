@@ -34,7 +34,7 @@ def sql_gib(time):
 services = {
     'dynamodb' : {
         'cost' : 0.25,
-        'storage' : sql_gb,
+        'storage' : lambda time: gb(firebase(time)),
     },
     'rds' : {
         'cost' : 0.115,
