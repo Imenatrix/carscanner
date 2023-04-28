@@ -24,6 +24,19 @@ def tfrecord(time):
     bytes_over_time = rows_per_month * bytes_per_row
     return bytes_over_time * time
 
+def big_query(time):
+    coiso = lambda x: x if x < 3 else 3
+    coiso = np.vectorize(coiso)
+    time_active = coiso(time)
+    time_inactive = time - time_active
+    bytes_per_row = 330
+    bytes_over_time = rows_per_month * bytes_per_row
+    return {
+        'active' : bytes_over_time * time_active / (1<<30),
+        'inactive' : bytes_over_time * time_inactive / (1<<30)
+    }
+
+
 def gb(bytes_array):
     return bytes_array / (10 ** 9)
 
@@ -66,6 +79,12 @@ services = {
     }
 }
 
+big_query_service = {
+    'cost_active' : 0.023,
+    'cost_inactive' : 0.016,
+    'storage' : big_query
+}
+
 def estimate(services, cum):
     out = {}
     for title, service in services.items():
@@ -87,9 +106,24 @@ def estimate_service(title, service, cum):
         out[f'{title} - cumulative'] = np.cumsum(price)
     return out
 
+def estimate_big_query(title, service, cum):
+    storage = service['storage'](time)
+    price = service['cost_active'] * storage['active'] + service['cost_inactive'] * storage['inactive']
+    if 'additional_costs' in service:
+        for cost in service['additional_costs'].values():
+            price += cost
+    
+    out = {}
+    out[f'{title} - storage'] = storage['active'] + storage['inactive']
+    out[f'{title} - price'] = price
+    if cum:
+        out[f'{title} - cumulative'] = np.cumsum(price)
+    return out
+
 df = pd.DataFrame({
     'month' : time,
-    **estimate(services, True)
+    **estimate(services, True),
+    **estimate_big_query('big query', big_query_service, True)
 })
 df = df.round(2)
 
