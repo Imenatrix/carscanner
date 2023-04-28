@@ -88,6 +88,11 @@ class Firestore(Service):
     title = 'firestore'
     bytes_per_entry = 450
 
+class MongoDB(Service):
+    cost = 0.25
+    title = 'mongodb'
+    bytes_per_entry = 444
+
 class BigQuery(Service):
     cost_active = 0.023
     cost_inactive = 0.016
@@ -135,6 +140,7 @@ services = [
     CloudSQL(),
     Firestore(),
     BigQuery(),
+    MongoDB()
 ]
 
 def estimate(services, cum):
